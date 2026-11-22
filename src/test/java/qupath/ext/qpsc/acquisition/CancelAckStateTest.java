@@ -1,10 +1,10 @@
-package qupath.ext.qpsc.controller.workflow;
+package qupath.ext.qpsc.acquisition;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.controller.workflow.CancelAckState.Phase;
+import qupath.ext.qpsc.acquisition.CancelAckState.Phase;
 
 /** The progress dialog waits for the run to confirm a cancel instead of closing itself. */
 class CancelAckStateTest {

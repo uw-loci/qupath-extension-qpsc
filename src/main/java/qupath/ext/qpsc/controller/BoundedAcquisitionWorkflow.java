@@ -294,7 +294,7 @@ public class BoundedAcquisitionWorkflow {
             // to the legacy angle path. The focus channel (if any) is moved to
             // position 0 so it's collected first per tile and the autofocus snap
             // shares hardware state with the first acquired image.
-            final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures = ChannelResolutionService.resolve(
+            final List<qupath.ext.qpsc.model.ChannelExposure> channelExposures = ChannelResolutionService.resolve(
                     modalityFolder,
                     result.objective(),
                     result.detector(),
@@ -303,13 +303,8 @@ public class BoundedAcquisitionWorkflow {
 
             // Resolve angles via shared service. For channel-based modalities the
             // service short-circuits to an empty list (no rotation axis).
-            CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
-                    AngleResolutionService.resolve(
-                            modalityFolder,
-                            result.objective(),
-                            result.detector(),
-                            result.angleOverrides(),
-                            result.wbMode());
+            CompletableFuture<List<qupath.ext.qpsc.model.AngleExposure>> anglesFuture = AngleResolutionService.resolve(
+                    modalityFolder, result.objective(), result.detector(), result.angleOverrides(), result.wbMode());
 
             anglesFuture
                     .thenAccept(angleExposures -> {
@@ -320,7 +315,7 @@ public class BoundedAcquisitionWorkflow {
                             logger.info(
                                     "Channels: {}",
                                     channelExposures.stream()
-                                            .map(qupath.ext.qpsc.modality.ChannelExposure::channelId)
+                                            .map(qupath.ext.qpsc.model.ChannelExposure::channelId)
                                             .collect(Collectors.toList()));
                         }
 

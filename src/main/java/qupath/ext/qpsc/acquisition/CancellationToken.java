@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.controller.workflow;
+package qupath.ext.qpsc.acquisition;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;

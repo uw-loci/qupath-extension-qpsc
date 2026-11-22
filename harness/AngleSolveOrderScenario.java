@@ -24,7 +24,7 @@ import javafx.beans.property.BooleanProperty;
 import javax.imageio.ImageIO;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;

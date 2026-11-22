@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.model;
 
 /**
  * Reference to a Micro-Manager ConfigGroup preset (a named device state applied

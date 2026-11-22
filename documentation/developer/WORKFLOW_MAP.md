@@ -35,7 +35,7 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/controller/workflow/ProjectHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/SingleTileRefinement.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/StitchingHelper.java
-  - src/main/java/qupath/ext/qpsc/controller/workflow/TileCleanupHelper.java
+  - src/main/java/qupath/ext/qpsc/acquisition/TileCleanupHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/TileHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/WorkflowRegistry.java
   - src/main/java/qupath/ext/qpsc/modality/ModalityRegistry.java

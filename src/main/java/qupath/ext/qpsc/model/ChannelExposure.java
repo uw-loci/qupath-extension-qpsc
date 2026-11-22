@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.model;
 
 /**
  * Pairs a {@link Channel} identifier with the exposure time to use for it in

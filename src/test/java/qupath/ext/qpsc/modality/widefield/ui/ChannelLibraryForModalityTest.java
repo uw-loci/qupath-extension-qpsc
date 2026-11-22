@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.config.BundledScopeInstaller.Bundle;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.model.Channel;
 
 /**
  * The channel picker shows the selected modality's library. The demo config lists

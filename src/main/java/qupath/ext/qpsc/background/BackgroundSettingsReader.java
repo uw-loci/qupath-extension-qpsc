@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.config.HardwareKey;
 import qupath.ext.qpsc.config.ObjectiveUtils;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.model.AngleExposure;
 
 /**
  * BackgroundSettingsReader - Utility for reading background collection settings files

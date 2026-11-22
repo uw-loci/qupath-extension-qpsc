@@ -3,8 +3,8 @@ package qupath.ext.qpsc.modality.laserscan;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.lib.images.ImageData;
 

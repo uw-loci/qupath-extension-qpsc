@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.PropertyRef;
-import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.PropertyRef;
+import qupath.ext.qpsc.model.PropertyWrite;
 
 /** The per-channel background summary says nothing about intensity for a channel without one. */
 class ChannelBackgroundSummaryTest {

@@ -6,6 +6,9 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javafx.scene.Node;
 import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.model.AngleExposure;
+import qupath.ext.qpsc.model.BackgroundValidationResult;
+import qupath.ext.qpsc.model.Channel;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /**

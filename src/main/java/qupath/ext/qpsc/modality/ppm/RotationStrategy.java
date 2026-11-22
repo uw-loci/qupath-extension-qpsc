@@ -3,7 +3,7 @@ package qupath.ext.qpsc.modality.ppm;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.model.AngleExposure;
 
 /**
  * Strategy interface for handling stage rotation based on imaging modality.

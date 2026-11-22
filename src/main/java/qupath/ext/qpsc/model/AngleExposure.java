@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.model;
 
 /**
  * Immutable data container that pairs a rotation angle with its associated exposure time for

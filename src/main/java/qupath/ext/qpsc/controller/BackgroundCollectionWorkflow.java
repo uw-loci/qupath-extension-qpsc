@@ -25,11 +25,11 @@ import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.model.AngleExposure;
+import qupath.ext.qpsc.model.Channel;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
@@ -360,7 +360,7 @@ public class BackgroundCollectionWorkflow {
             // Channel-based modalities (fluorescence) collect one background per
             // in-use channel, keyed by profile -- a separate path from the
             // angle-based collection below.
-            List<qupath.ext.qpsc.modality.Channel> profileChannels =
+            List<qupath.ext.qpsc.model.Channel> profileChannels =
                     effectiveProfileKey != null ? configManager.getChannelsForProfile(effectiveProfileKey) : List.of();
             if (!profileChannels.isEmpty()) {
                 executeChannelBackgroundAcquisition(

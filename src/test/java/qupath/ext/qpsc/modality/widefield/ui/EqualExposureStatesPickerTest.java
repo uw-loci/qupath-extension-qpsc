@@ -19,7 +19,7 @@ import javafx.scene.layout.GridPane;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.model.Channel;
 
 /**
  * The LC-PolScope state picker: every state always acquired, at ONE exposure. The ordinary channel

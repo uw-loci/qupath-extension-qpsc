@@ -7,11 +7,12 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.ChannelExposure;
-import qupath.ext.qpsc.modality.PresetRef;
+import qupath.ext.qpsc.config.MmStageDevices;
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.model.AngleExposure;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.ChannelExposure;
+import qupath.ext.qpsc.model.PresetRef;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 

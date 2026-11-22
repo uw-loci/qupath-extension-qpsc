@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.model;
 
 /**
  * Pointer to a Micro-Manager device property, without a value.

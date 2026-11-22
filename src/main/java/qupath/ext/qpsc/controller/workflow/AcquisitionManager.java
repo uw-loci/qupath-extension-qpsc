@@ -26,20 +26,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.acquisition.CancelGate;
 import qupath.ext.qpsc.acquisition.StageFrameWatchdog;
+import qupath.ext.qpsc.acquisition.StageLimitCheck;
+import qupath.ext.qpsc.acquisition.TileConfigurationFile;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
 import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.MmStageDevices;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.focus.ZFocusPredictionModel;
 import qupath.ext.qpsc.geometry.FlipResolver;
 import qupath.ext.qpsc.geometry.TransformationFunctions;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.model.AngleExposure;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.ChannelExposure;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
@@ -50,7 +54,6 @@ import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.mda.MdaRequestBuilder;
 import qupath.ext.qpsc.service.mda.MdaSettingsWriter;
 import qupath.ext.qpsc.service.mda.MdaWriteResult;
-import qupath.ext.qpsc.service.mda.MmStageDevices;
 import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
@@ -1668,7 +1671,7 @@ public class AcquisitionManager {
     private boolean monitorAcquisition(
             PathObject annotation,
             List<AngleExposure> angleExposures,
-            List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures,
+            List<qupath.ext.qpsc.model.ChannelExposure> channelExposures,
             AcquisitionPlan acquisitionPlan,
             Path mdaSettingsPath,
             DualProgressDialog progressDialog)

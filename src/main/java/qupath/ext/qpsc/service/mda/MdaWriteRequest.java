@@ -3,7 +3,8 @@ package qupath.ext.qpsc.service.mda;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.config.MmStageDevices;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.model.SampleSetupResult;
 
 public record MdaWriteRequest(

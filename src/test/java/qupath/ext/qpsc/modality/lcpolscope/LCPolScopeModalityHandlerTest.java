@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.PresetRef;
-import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.PresetRef;
+import qupath.ext.qpsc.model.PropertyWrite;
 
 /**
  * Unit tests for the LC-PolScope modality handler.

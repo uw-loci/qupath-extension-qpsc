@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.ChannelExposure;
 
 /**
  * Resolves the final {@link ChannelExposure} list for an acquisition by

@@ -150,7 +150,7 @@ class DerivedStitchIsolationTest {
         folder("orientation_color");
         ModalityHandler handler = new ModalityHandler() {
             @Override
-            public CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> getRotationAngles(
+            public CompletableFuture<List<qupath.ext.qpsc.model.AngleExposure>> getRotationAngles(
                     String modalityName, String objective, String detector, String wbMode) {
                 return CompletableFuture.completedFuture(List.of());
             }

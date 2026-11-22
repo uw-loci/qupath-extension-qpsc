@@ -66,7 +66,7 @@ class DedicatedFocusChannelFlagsTest {
     void theFocusChannelNeedNotBeOneOfTheAcquiredChannels() {
         // Focusing on a bright stain while imaging dim ones is the main use of the option,
         // so unlike --focus-channel this is not filtered against the acquired channel list.
-        String msg = base().channelExposures(List.of(new qupath.ext.qpsc.modality.ChannelExposure("FITC", 300.0)))
+        String msg = base().channelExposures(List.of(new qupath.ext.qpsc.model.ChannelExposure("FITC", 300.0)))
                 .dedicatedFocusChannel("DAPI", 20.0, null)
                 .buildSocketMessage();
         assertTrue(msg.contains("--af-channel DAPI"), msg);

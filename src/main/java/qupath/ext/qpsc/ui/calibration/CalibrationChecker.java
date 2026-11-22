@@ -510,7 +510,7 @@ public class CalibrationChecker {
     /**
      * Validates per-channel (fluorescence) background coverage for an acquisition
      * profile. Only channels in use (the unused-channel rule, {@link
-     * qupath.ext.qpsc.modality.Channel#isInUse()}) are required. Returns:
+     * qupath.ext.qpsc.model.Channel#isInUse()}) are required. Returns:
      * <ul>
      *   <li>READY -- every in-use channel has a matching background</li>
      *   <li>WARNING -- a channel is missing, or its profile exposure/intensity
@@ -531,8 +531,8 @@ public class CalibrationChecker {
         String profileKey = mgr == null ? null : mgr.resolveProfileKey(modality, objective);
         if (profileKey != null) {
             channelIds = mgr.getChannelsForProfile(profileKey).stream()
-                    .filter(qupath.ext.qpsc.modality.Channel::isInUse)
-                    .map(qupath.ext.qpsc.modality.Channel::id)
+                    .filter(qupath.ext.qpsc.model.Channel::isInUse)
+                    .map(qupath.ext.qpsc.model.Channel::id)
                     .toList();
         }
         java.util.List<String> uncovered = FlatfieldProfiles.uncoveredChannels(folder, channelIds);
@@ -555,9 +555,9 @@ public class CalibrationChecker {
             String objective,
             String detector,
             String profileKey,
-            java.util.List<qupath.ext.qpsc.modality.Channel> profileChannels) {
+            java.util.List<qupath.ext.qpsc.model.Channel> profileChannels) {
         var inUse = profileChannels.stream()
-                .filter(qupath.ext.qpsc.modality.Channel::isInUse)
+                .filter(qupath.ext.qpsc.model.Channel::isInUse)
                 .toList();
         if (inUse.isEmpty()) {
             return new StepStatus(Status.NOT_APPLICABLE, "Profile has no in-use channels");

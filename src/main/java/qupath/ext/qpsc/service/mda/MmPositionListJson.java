@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import qupath.ext.qpsc.config.MmStageDevices;
 
 /**
  * Builds a Micro-Manager 2.0 stage position list as MM's "Micro-Manager Property Map"

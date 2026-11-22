@@ -24,7 +24,7 @@ public class StitchingRegistrationReferenceTest {
     /** A handler with no opinion, i.e. every modality that has not implemented the hook. */
     private static class NoPreferenceHandler implements ModalityHandler {
         @Override
-        public java.util.concurrent.CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> getRotationAngles(
+        public java.util.concurrent.CompletableFuture<List<qupath.ext.qpsc.model.AngleExposure>> getRotationAngles(
                 String modalityName, String objective, String detector, String wbMode) {
             return java.util.concurrent.CompletableFuture.completedFuture(List.of());
         }

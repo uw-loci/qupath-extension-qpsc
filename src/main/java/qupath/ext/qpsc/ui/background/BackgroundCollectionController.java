@@ -24,11 +24,11 @@ import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.background.BackgroundValidityChecker;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollectionResult;
-import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MountedHardware;
@@ -1240,7 +1240,7 @@ public class BackgroundCollectionController {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-            List<qupath.ext.qpsc.modality.Channel> channels = mgr.getChannelsForProfile(profileKey);
+            List<qupath.ext.qpsc.model.Channel> channels = mgr.getChannelsForProfile(profileKey);
             if (channels.isEmpty()) {
                 return false;
             }
@@ -1258,7 +1258,7 @@ public class BackgroundCollectionController {
                 grid.add(h, c, 0);
             }
             int row = 1;
-            for (qupath.ext.qpsc.modality.Channel ch : channels) {
+            for (qupath.ext.qpsc.model.Channel ch : channels) {
                 boolean inUse = ch.isInUse();
                 double intensity = ch.currentIntensityValue();
                 grid.add(new Label(ch.displayName()), 0, row);
@@ -1289,8 +1289,7 @@ public class BackgroundCollectionController {
      * compared with the acquisition by the server through {@code background_provenance.json}, so
      * the note says what makes it go stale.
      */
-    private void renderLcPolScopeStateTable(
-            MicroscopeConfigManager mgr, List<qupath.ext.qpsc.modality.Channel> channels) {
+    private void renderLcPolScopeStateTable(MicroscopeConfigManager mgr, List<qupath.ext.qpsc.model.Channel> channels) {
         GridPane grid = new GridPane();
         grid.setHgap(12);
         grid.setVgap(4);
@@ -1302,7 +1301,7 @@ public class BackgroundCollectionController {
         grid.add(h1, 1, 0);
         int row = 1;
         java.util.Set<String> exposures = new java.util.LinkedHashSet<>();
-        for (qupath.ext.qpsc.modality.Channel ch : channels) {
+        for (qupath.ext.qpsc.model.Channel ch : channels) {
             String exp = String.format("%.1f", ch.defaultExposureMs());
             exposures.add(exp);
             grid.add(new Label(ch.displayName()), 0, row);

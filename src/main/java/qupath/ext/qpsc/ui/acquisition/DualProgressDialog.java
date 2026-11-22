@@ -1088,7 +1088,7 @@ public class DualProgressDialog {
      * to the JavaFX thread and is idempotent.
      *
      * <p>Used by the multi-slide "Abort All" button (via a
-     * {@link qupath.ext.qpsc.controller.workflow.CancellationToken}) so a batch-level abort
+     * {@link qupath.ext.qpsc.acquisition.CancellationToken}) so a batch-level abort
      * both sends CANCEL and flips {@link #isCancelled()} true -- the latter is what makes the
      * acquire loop score a clean cancel instead of an unexpected error.
      */
@@ -1114,10 +1114,10 @@ public class DualProgressDialog {
             return;
         }
         timeline.stop();
-        cancelAck = new qupath.ext.qpsc.controller.workflow.CancelAckState(
+        cancelAck = new qupath.ext.qpsc.acquisition.CancelAckState(
                 System::currentTimeMillis,
                 qupath.ext.qpsc.controller.workflow.AcquisitionManager.CANCEL_ACK_TIMEOUT_MS);
-        statusLabel.setText(qupath.ext.qpsc.controller.workflow.CancelAckState.WAITING_TEXT);
+        statusLabel.setText(qupath.ext.qpsc.acquisition.CancelAckState.WAITING_TEXT);
         statusLabel.setTextFill(Color.RED);
 
         if (cancelCallback != null) {
@@ -1130,10 +1130,9 @@ public class DualProgressDialog {
         // If no acknowledgement arrives, close after
         // the timeout and say where the stop control is.
         cancelAckWatch = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
-            if (cancelAck != null
-                    && cancelAck.phase() == qupath.ext.qpsc.controller.workflow.CancelAckState.Phase.TIMED_OUT) {
+            if (cancelAck != null && cancelAck.phase() == qupath.ext.qpsc.acquisition.CancelAckState.Phase.TIMED_OUT) {
                 stopCancelAckWatch();
-                statusLabel.setText(qupath.ext.qpsc.controller.workflow.CancelAckState.TIMED_OUT_TEXT);
+                statusLabel.setText(qupath.ext.qpsc.acquisition.CancelAckState.TIMED_OUT_TEXT);
                 logger.warn(
                         "Cancel was not acknowledged within {} ms; closing the progress dialog",
                         qupath.ext.qpsc.controller.workflow.AcquisitionManager.CANCEL_ACK_TIMEOUT_MS);
@@ -1146,7 +1145,7 @@ public class DualProgressDialog {
         cancelAckWatch.play();
     }
 
-    private qupath.ext.qpsc.controller.workflow.CancelAckState cancelAck;
+    private qupath.ext.qpsc.acquisition.CancelAckState cancelAck;
     private Timeline cancelAckWatch;
 
     private void stopCancelAckWatch() {

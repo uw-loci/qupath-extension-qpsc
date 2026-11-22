@@ -5,10 +5,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.AngleExposure;
+import qupath.ext.qpsc.model.Channel;
 
 /**
  * Shared service for resolving rotation angles for a given modality/hardware combination.

@@ -16,7 +16,8 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.config.MmStageDevices;
+import qupath.ext.qpsc.model.AngleExposure;
 
 public final class MdaSettingsWriter {
 

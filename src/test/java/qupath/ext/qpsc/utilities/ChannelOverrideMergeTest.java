@@ -10,8 +10,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.PropertyWrite;
 
 /**
  * Tests for channel override merging in {@link MicroscopeConfigManager#getChannelsForProfile}.

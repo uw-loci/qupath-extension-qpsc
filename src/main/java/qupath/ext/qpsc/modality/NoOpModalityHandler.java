@@ -2,6 +2,7 @@ package qupath.ext.qpsc.modality;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import qupath.ext.qpsc.model.AngleExposure;
 
 /**
  * Handler for modalities that require no special processing.

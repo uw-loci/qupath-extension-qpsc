@@ -7,8 +7,8 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.PropertyRef;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.PropertyRef;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 
 /**

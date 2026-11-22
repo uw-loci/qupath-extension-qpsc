@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 
 /**

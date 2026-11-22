@@ -15,7 +15,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.config.MmStageDevices;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.model.SampleSetupResult;
 
 class MdaSettingsWriterTest {

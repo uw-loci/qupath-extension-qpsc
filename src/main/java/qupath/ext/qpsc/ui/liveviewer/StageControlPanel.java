@@ -998,7 +998,7 @@ public class StageControlPanel extends VBox {
 
     private final Map<String, Spinner<Double>> cameraChannelExpSpinners = new HashMap<>();
     private final Map<String, Spinner<Double>> cameraChannelIntSpinners = new HashMap<>();
-    private final Map<String, qupath.ext.qpsc.modality.Channel> cameraChannelDefs = new HashMap<>();
+    private final Map<String, qupath.ext.qpsc.model.Channel> cameraChannelDefs = new HashMap<>();
     private final Map<String, PauseTransition> cameraChannelExpDebounces = new HashMap<>();
     private final Map<String, Double> cameraChannelExpPending = new HashMap<>();
     /** Active acquisition-profile selection in the Camera tab Profile dropdown. */
@@ -1652,7 +1652,7 @@ public class StageControlPanel extends VBox {
         // Try the channel library first. If the modality has declared
         // channels, render one row per channel. Otherwise fall back to
         // the old single-exposure layout.
-        java.util.List<qupath.ext.qpsc.modality.Channel> channels = java.util.List.of();
+        java.util.List<qupath.ext.qpsc.model.Channel> channels = java.util.List.of();
         try {
             channels = mgr.getModalityChannels(modality);
         } catch (Exception e) {
@@ -1725,7 +1725,7 @@ public class StageControlPanel extends VBox {
             grid.add(noneLabel, 1, 1);
 
             int row = 2;
-            for (qupath.ext.qpsc.modality.Channel ch : channels) {
+            for (qupath.ext.qpsc.model.Channel ch : channels) {
                 RadioButton previewRadio = new RadioButton();
                 previewRadio.setToggleGroup(previewGroup);
                 previewRadio.setTooltip(new Tooltip("Mark " + ch.displayName() + " as the active preview channel. "
@@ -1819,7 +1819,7 @@ public class StageControlPanel extends VBox {
                     // visible brightness blip on Enter (the camera resync
                     // briefly lost the LED state). DLED Intensity-XXXnm
                     // accepts writes during live mode without issue.
-                    final qupath.ext.qpsc.modality.PropertyRef pr = ch.intensityProperty();
+                    final qupath.ext.qpsc.model.PropertyRef pr = ch.intensityProperty();
                     Thread t = new Thread(
                             () -> {
                                 try {
@@ -1935,12 +1935,12 @@ public class StageControlPanel extends VBox {
      * try the saved PersistentPreferences entry, then the default value
      * from the channel's intensityProperty in the YAML, then 0.
      */
-    private double resolveChannelIntensity(qupath.ext.qpsc.modality.Channel channel) {
+    private double resolveChannelIntensity(qupath.ext.qpsc.model.Channel channel) {
         Double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelIntensity(
                 currentCameraModality, channel.id());
         if (saved != null) return saved;
         if (channel.intensityProperty() != null) {
-            for (qupath.ext.qpsc.modality.PropertyWrite pw : channel.properties()) {
+            for (qupath.ext.qpsc.model.PropertyWrite pw : channel.properties()) {
                 if (pw.device().equals(channel.intensityProperty().device())
                         && pw.property().equals(channel.intensityProperty().property())) {
                     try {
@@ -1961,7 +1961,7 @@ public class StageControlPanel extends VBox {
      * {@link #resolveChannelIntensity}, so an FITC tune-up survives a
      * modality rebuild instead of snapping back to 80 ms every time.
      */
-    private double resolveChannelExposureMs(String modality, qupath.ext.qpsc.modality.Channel channel) {
+    private double resolveChannelExposureMs(String modality, qupath.ext.qpsc.model.Channel channel) {
         Double saved =
                 qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelExposureMs(modality, channel.id());
         if (saved != null && saved > 0) return saved;
@@ -2262,7 +2262,7 @@ public class StageControlPanel extends VBox {
         // save races the writer.
         java.util.Map<String, Double> expSnap = new java.util.LinkedHashMap<>();
         java.util.Map<String, Double> intSnap = new java.util.LinkedHashMap<>();
-        java.util.Map<String, qupath.ext.qpsc.modality.Channel> defSnap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, qupath.ext.qpsc.model.Channel> defSnap = new java.util.LinkedHashMap<>();
         for (var entry : cameraChannelDefs.entrySet()) {
             String id = entry.getKey();
             defSnap.put(id, entry.getValue());
@@ -2277,7 +2277,7 @@ public class StageControlPanel extends VBox {
         StringBuilder confirmDetails = new StringBuilder("Modality:  " + modality + "\n\n");
         for (var entry : defSnap.entrySet()) {
             String id = entry.getKey();
-            qupath.ext.qpsc.modality.Channel ch = entry.getValue();
+            qupath.ext.qpsc.model.Channel ch = entry.getValue();
             confirmDetails.append("  ").append(id).append(":  ");
             Double exp = expSnap.get(id);
             confirmDetails.append("exposure ").append(exp != null ? fmtNum(exp) + " ms" : "(unchanged)");
@@ -2308,7 +2308,7 @@ public class StageControlPanel extends VBox {
                         StringBuilder summary = new StringBuilder();
                         for (var entry : defSnap.entrySet()) {
                             String id = entry.getKey();
-                            qupath.ext.qpsc.modality.Channel ch = entry.getValue();
+                            qupath.ext.qpsc.model.Channel ch = entry.getValue();
                             Double exp = expSnap.get(id);
                             if (exp != null) {
                                 var r = qupath.ext.qpsc.config.ConfigYamlEditor.setChannelExposureMs(
@@ -3099,7 +3099,7 @@ public class StageControlPanel extends VBox {
             String profileName,
             String channelId,
             Double exposureOverride,
-            qupath.ext.qpsc.modality.PropertyRef intensityProperty,
+            qupath.ext.qpsc.model.PropertyRef intensityProperty,
             Double intensityOverride) {
         if (profileName == null) return;
         String label = (channelId == null || channelId.isEmpty()) ? "None" : channelId;
@@ -3357,7 +3357,7 @@ public class StageControlPanel extends VBox {
      * when no wavelength is present (e.g. the Brightfield channel of a bf_if
      * library), so non-wavelength channels still render sensibly.
      */
-    private static String formatChannelLabel(qupath.ext.qpsc.modality.Channel ch) {
+    private static String formatChannelLabel(qupath.ext.qpsc.model.Channel ch) {
         String display = ch.displayName();
         if (display != null) {
             java.util.regex.Matcher m = WAVELENGTH_PATTERN.matcher(display);

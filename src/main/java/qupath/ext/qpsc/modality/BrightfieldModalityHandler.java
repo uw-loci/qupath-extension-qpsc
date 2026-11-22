@@ -11,6 +11,7 @@ import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.config.HardwareKey;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;

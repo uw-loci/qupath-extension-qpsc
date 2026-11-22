@@ -14,12 +14,11 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.ProfileWhiteBalance;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.PresetRef;
-import qupath.ext.qpsc.modality.PropertyRef;
-import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.model.Channel;
+import qupath.ext.qpsc.model.PresetRef;
+import qupath.ext.qpsc.model.PropertyRef;
+import qupath.ext.qpsc.model.PropertyWrite;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.service.mda.MmStageDevices;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**
