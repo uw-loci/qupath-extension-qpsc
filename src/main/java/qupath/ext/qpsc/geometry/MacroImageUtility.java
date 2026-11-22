@@ -321,17 +321,7 @@ public class MacroImageUtility {
         BufferedImage flipped = new BufferedImage(width, height, image.getType());
         Graphics2D g2d = flipped.createGraphics();
 
-        // Apply flips using affine transform
-        if (flipX && flipY) {
-            g2d.translate(width, height);
-            g2d.scale(-1, -1);
-        } else if (flipX) {
-            g2d.translate(width, 0);
-            g2d.scale(-1, 1);
-        } else { // flipY only
-            g2d.translate(0, height);
-            g2d.scale(1, -1);
-        }
+        g2d.transform(TransformationFunctions.createFlipTransform(flipX, flipY, width, height));
 
         g2d.drawImage(image, 0, 0, null);
         g2d.dispose();

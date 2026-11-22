@@ -275,10 +275,13 @@ public class TransformationFunctions {
     }
 
     /**
-     * Creates a flip transform following QuPath coordinate system conventions.
-     * Origin (0,0) is at top-left corner of full-resolution image.
+     * The mirror of an image about its own center, in pixel coordinates with the origin at the
+     * top-left corner: x' = width - x when {@code flipX}, y' = height - y when {@code flipY}.
+     * The identity when neither is set. Every flip of an image, an annotation or a macro frame
+     * in QPSC goes through this one method.
      */
-    static AffineTransform createFlipTransform(boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
+    public static AffineTransform createFlipTransform(
+            boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
         AffineTransform transform = new AffineTransform();
 
         if (flipX && flipY) {

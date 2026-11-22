@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The log names microscope commands sent from QuPath's display thread.** A command waits for the server's answer while holding its socket, so on the display thread every QuPath window waits too. The first command from each place in the code that does this now logs a WARN naming that place (`Socket command on the FX thread ...`), once per session.
 - **"Cancelling..." reads "Canceling..."** on buttons and status lines, in the American spelling the rest of QPSC uses.
 - **Removed code nothing called:** `UIFunctions.checkValidAnnotationsGUI` and `stageToQuPathAlignmentGUI2`, `MicroscopeErrorHandler`, `InterfaceController` with `interface.fxml`, two private preference helpers, `ExistingAlignmentPath.verifyCorrectImageIsOpen`, and a second copy of the transform-preset save in `AffineTransformManager`.
+- **One flip helper.** The same flip of an image about its center was written out in seven places (flipped and rotated companions, annotation transfer, forward propagation, the cross-scope macro mirror, the macro image). All now call `TransformationFunctions.createFlipTransform`, which is public; `ForwardPropagationWorkflow.createFlip`, which the PPM extension calls, delegates to it.
 
 ## [0.14.0] - 2026-11-22
 

@@ -114,17 +114,7 @@ public final class CrossScopeTransformBuilder {
                 throw new IllegalArgumentException(
                         "Macro frames differ but neither preset captured macroDisplayWidth/Height; cannot mirror");
             }
-            AffineTransform mirror = new AffineTransform();
-            if (mirrorX && mirrorY) {
-                mirror.scale(-1, -1);
-                mirror.translate(-macroW, -macroH);
-            } else if (mirrorX) {
-                mirror.scale(-1, 1);
-                mirror.translate(-macroW, 0);
-            } else {
-                mirror.scale(1, -1);
-                mirror.translate(0, -macroH);
-            }
+            AffineTransform mirror = TransformationFunctions.createFlipTransform(mirrorX, mirrorY, macroW, macroH);
             composed.concatenate(mirror);
             logger.info(
                     "CrossScope: macro frame mirror applied (mirrorX={}, mirrorY={}, macroW={}, macroH={})",

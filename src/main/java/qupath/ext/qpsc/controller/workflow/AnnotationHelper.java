@@ -449,17 +449,8 @@ public class AnnotationHelper {
         }
 
         // Flip in the rotated frame (dimensions wr x hr).
-        java.awt.geom.AffineTransform flip = new java.awt.geom.AffineTransform();
-        if (flipX && flipY) {
-            flip.translate(wr, hr);
-            flip.scale(-1, -1);
-        } else if (flipX) {
-            flip.translate(wr, 0);
-            flip.scale(-1, 1);
-        } else if (flipY) {
-            flip.translate(0, hr);
-            flip.scale(1, -1);
-        }
+        java.awt.geom.AffineTransform flip =
+                qupath.ext.qpsc.geometry.TransformationFunctions.createFlipTransform(flipX, flipY, wr, hr);
 
         java.awt.geom.AffineTransform t = new java.awt.geom.AffineTransform(flip);
         t.concatenate(rotate); // apply rotate first, then flip

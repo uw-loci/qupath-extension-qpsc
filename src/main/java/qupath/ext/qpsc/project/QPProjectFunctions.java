@@ -22,6 +22,7 @@ import javafx.beans.value.ObservableValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.geometry.ImageFlipHelper;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -765,24 +766,9 @@ public class QPProjectFunctions {
             // Order: scale first, then translate
             TransformedServerBuilder builder = new TransformedServerBuilder(originalServer);
 
-            if (flipX && flipY) {
-                // Both flips
-                AffineTransform transform = new AffineTransform();
-                transform.scale(-1.0, -1.0);
-                transform.translate(-imageWidth, -imageHeight);
-                builder = builder.transform(transform);
-            } else if (flipX) {
-                // Horizontal flip only
-                AffineTransform transform = new AffineTransform();
-                transform.scale(-1.0, 1.0);
-                transform.translate(-imageWidth, 0);
-                builder = builder.transform(transform);
-            } else if (flipY) {
-                // Vertical flip only
-                AffineTransform transform = new AffineTransform();
-                transform.scale(1.0, -1.0);
-                transform.translate(0, -imageHeight);
-                builder = builder.transform(transform);
+            if (flipX || flipY) {
+                builder = builder.transform(
+                        TransformationFunctions.createFlipTransform(flipX, flipY, imageWidth, imageHeight));
             }
 
             // Build the transformed server
@@ -1097,17 +1083,8 @@ public class QPProjectFunctions {
             int rotatedWidth = rotatedServer.getWidth();
             int rotatedHeight = rotatedServer.getHeight();
 
-            AffineTransform flip = new AffineTransform();
-            if (flipX && flipY) {
-                flip.scale(-1.0, -1.0);
-                flip.translate(-rotatedWidth, -rotatedHeight);
-            } else if (flipX) {
-                flip.scale(-1.0, 1.0);
-                flip.translate(-rotatedWidth, 0);
-            } else {
-                flip.scale(1.0, -1.0);
-                flip.translate(0, -rotatedHeight);
-            }
+            AffineTransform flip =
+                    TransformationFunctions.createFlipTransform(flipX, flipY, rotatedWidth, rotatedHeight);
             ImageServer<BufferedImage> composedServer =
                     new TransformedServerBuilder(rotatedServer).transform(flip).build();
 

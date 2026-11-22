@@ -1345,18 +1345,7 @@ public class ForwardPropagationWorkflow {
      * Public for use by modality extensions (e.g., PPM).
      */
     public static AffineTransform createFlip(boolean flipX, boolean flipY, int width, int height) {
-        AffineTransform flip = new AffineTransform();
-        if (flipX && flipY) {
-            flip.translate(width, height);
-            flip.scale(-1, -1);
-        } else if (flipX) {
-            flip.translate(width, 0);
-            flip.scale(-1, 1);
-        } else if (flipY) {
-            flip.translate(0, height);
-            flip.scale(1, -1);
-        }
-        return flip;
+        return qupath.ext.qpsc.geometry.TransformationFunctions.createFlipTransform(flipX, flipY, width, height);
     }
 
     /**
