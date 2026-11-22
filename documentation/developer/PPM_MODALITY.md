@@ -375,7 +375,7 @@ The new code path lives in `_acquire_tile_angles_angle_outer` in `microscope_com
 |------|---------|
 | `modality/ModalityHandler.java` | Plugin interface |
 | `modality/ModalityRegistry.java` | Prefix-based handler lookup |
-| `modality/AngleExposure.java` | Immutable (ticks, exposureMs) record |
+| `model/AngleExposure.java` | Immutable (ticks, exposureMs) record |
 | `modality/ppm/PPMModalityHandler.java` | PPM implementation (~450 lines) |
 | `modality/ppm/PPMExposureResolver.java` | Resolves exposure per angle (background → config → prefs) |
 | `modality/ppm/RotationManager.java` | Config loading + strategy creation |
