@@ -873,6 +873,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if connection cannot be established
      */
     private void ensureAuxConnected() throws IOException {
+        FxThreadSocketUse.check("auxiliary");
         if (auxConnected.get()) {
             return;
         }
@@ -3980,6 +3981,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if connection cannot be established
      */
     private void ensureConnected() throws IOException {
+        FxThreadSocketUse.check("primary");
         if (!connected.get()) {
             connect();
         }

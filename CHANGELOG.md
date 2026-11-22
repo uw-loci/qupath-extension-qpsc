@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bounded Acquisition no longer freezes QuPath when the stitching settings are incompatible.** With OME-ZARR output and J2K compression, the warning that asks you to fix them was posted to QuPath's display thread while that same thread waited for the answer, so the warning never appeared and every window stopped responding. The warning now shows, and **Retry** and **Cancel Acquisition** work.
+- **The Live Viewer changes its controls only on QuPath's display thread.** When frames stopped (for example because the microscope server died) and reconnecting failed, the Live Viewer switched Live off from its frame-reading thread, and the Navigate tab's buttons, joystick and banner, which follow that switch, were changed off the display thread. JavaFX does not allow that, and it can leave windows blank or unresponsive. The same happened when a workflow stopped or restarted Live. This is the leading candidate for the frozen windows seen after the server died on 2026-11-21, not a proven cause.
+
+### Changed
+
+- **The log names microscope commands sent from QuPath's display thread.** A command waits for the server's answer while holding its socket, so on the display thread every QuPath window waits too. The first command from each place in the code that does this now logs a WARN naming that place (`Socket command on the FX thread ...`), once per session.
+
 ## [0.14.0] - 2026-11-22
 
 Pairs with microscope_command_server 1.6.0, microscope_control 1.3.0, microscope_imageprocessing 0.5.0 and polscope_library 0.2.0: every item below that needs "the microscope server change of the same date" needs server 1.6.0, and an older server turns off the hardware-status line and the microscope-released notice without an error. Use tiles-to-pyramid 0.10.1: the stitching queue's Time left column needs 0.9.0 or later, and BaSiC profiles on MicroManager data need 0.8.1 or later.

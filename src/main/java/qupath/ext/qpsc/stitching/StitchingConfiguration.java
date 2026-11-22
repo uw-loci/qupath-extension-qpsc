@@ -2,9 +2,6 @@ package qupath.ext.qpsc.stitching;
 
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
-import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
@@ -15,6 +12,7 @@ import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.fx.utils.FXUtils;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
 
 /**
@@ -152,9 +150,9 @@ public class StitchingConfiguration {
      * / "Cancel" buttons. The loop continues until settings are valid or the user
      * cancels.</p>
      *
-     * <p>This method blocks the calling thread (it is intended to be called from
-     * a background/workflow thread). UI dialogs are dispatched on the FX thread
-     * and the caller waits via {@link CountDownLatch}.</p>
+     * <p>The dialog is shown on the FX thread. Called from any other thread, this
+     * blocks until the user answers; called on the FX thread, it shows the dialog
+     * there with {@code showAndWait}.</p>
      *
      * @return {@code true} if settings are now valid, {@code false} if the user canceled
      */
@@ -167,47 +165,43 @@ public class StitchingConfiguration {
 
             logger.warn("Stitching settings invalid: {}", result.message());
 
-            // Show warning dialog on FX thread and wait for user response
-            CountDownLatch latch = new CountDownLatch(1);
-            AtomicBoolean userWantsRetry = new AtomicBoolean(false);
+            // Ask on the FX thread. callOnApplicationThread runs the dialog
+            // directly when the caller is already on it (Bounded Acquisition's
+            // dialog callback is), and otherwise waits for the answer; posting
+            // with runLater and then waiting from the FX thread would never return.
+            // It returns null when the dialog failed or the wait was interrupted
+            // (it logs both); either counts as Cancel.
+            Boolean userWantsRetry = FXUtils.callOnApplicationThread(() -> askRetry(result.message()));
 
-            Platform.runLater(() -> {
-                ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
-                ButtonType cancelButton = new ButtonType("Cancel Acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
-
-                Alert alert = new Alert(Alert.AlertType.WARNING);
-                // Non-modal: this alert tells the operator to go and edit
-                // Edit -> Preferences -> QPSC before pressing Retry, and an
-                // application-modal alert blocks the very window it points at.
-                // showAndWait() still holds the retry loop until they answer.
-                alert.initModality(Modality.NONE);
-                alert.setTitle("Incompatible Stitching Settings");
-                alert.setHeaderText("Please fix the stitching settings before continuing");
-                alert.setContentText(
-                        result.message() + "\n\nAdjust the settings in Edit -> Preferences -> QPSC, then click Retry.");
-                alert.getDialogPane().setMinWidth(500);
-                alert.getButtonTypes().setAll(retryButton, cancelButton);
-
-                DialogOwner.own(alert);
-                var response = alert.showAndWait();
-                userWantsRetry.set(response.isPresent() && response.get() == retryButton);
-                latch.countDown();
-            });
-
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-
-            if (!userWantsRetry.get()) {
+            if (!Boolean.TRUE.equals(userWantsRetry)) {
                 logger.info("User canceled due to invalid stitching settings");
                 return false;
             }
 
             logger.info("User requested retry after adjusting stitching settings");
         }
+    }
+
+    /** Shows the incompatible-settings warning and returns true when the user chose Retry. FX thread only. */
+    private static boolean askRetry(String problem) {
+        ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel Acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        // Non-modal: this alert tells the operator to go and edit
+        // Edit -> Preferences -> QPSC before pressing Retry, and an
+        // application-modal alert blocks the very window it points at.
+        // showAndWait() still holds the retry loop until they answer.
+        alert.initModality(Modality.NONE);
+        alert.setTitle("Incompatible Stitching Settings");
+        alert.setHeaderText("Please fix the stitching settings before continuing");
+        alert.setContentText(problem + "\n\nAdjust the settings in Edit -> Preferences -> QPSC, then click Retry.");
+        alert.getDialogPane().setMinWidth(500);
+        alert.getButtonTypes().setAll(retryButton, cancelButton);
+
+        DialogOwner.own(alert);
+        var response = alert.showAndWait();
+        return response.isPresent() && response.get() == retryButton;
     }
 
     /**

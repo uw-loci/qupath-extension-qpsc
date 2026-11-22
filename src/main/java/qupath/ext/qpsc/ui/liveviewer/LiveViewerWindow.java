@@ -315,6 +315,23 @@ public class LiveViewerWindow {
     }
 
     /**
+     * Records whether Live is streaming. The flag is set at once, for the poller and
+     * workflow threads that read it; {@code liveActiveProperty}, which the stage
+     * panel's controls are bound to, is set on the FX thread. The frame poller and
+     * the static stop/restart helpers call this from background threads, and a
+     * bound property changed there edits the scene graph off the FX thread.
+     */
+    private void setLiveActive(boolean active) {
+        liveActive = active;
+        if (Platform.isFxApplicationThread()) {
+            liveActiveProperty.set(active);
+        } else {
+            // Read the flag when the update runs, so two quick changes cannot land out of order.
+            Platform.runLater(() -> liveActiveProperty.set(liveActive));
+        }
+    }
+
+    /**
      * Reconcile local liveActive + button visuals with the authoritative
      * streaming state reported by the socket client. Called from the
      * streamingActiveProperty listener so any path that stops/starts
@@ -324,8 +341,7 @@ public class LiveViewerWindow {
         if (liveActive == nowActive) {
             return;
         }
-        liveActive = nowActive;
-        liveActiveProperty.set(nowActive);
+        setLiveActive(nowActive);
         updateLiveButtonStyle(nowActive);
         updateStatus(nowActive ? "Live ON" : "Live OFF");
         logger.info("Live button synced to server streaming state: {}", nowActive ? "ACTIVE" : "INACTIVE");
@@ -645,8 +661,7 @@ public class LiveViewerWindow {
         } catch (IOException e) {
             logger.warn("Failed to stop QPSC Live Viewer streaming: {}", e.getMessage());
         }
-        instance.liveActive = false;
-        instance.liveActiveProperty.set(false);
+        instance.setLiveActive(false);
         instance.lastFrameArrivalTime = 0;
         // Cosmetic UI update -- non-blocking
         Platform.runLater(() -> {
@@ -718,8 +733,7 @@ public class LiveViewerWindow {
             // any prior "FAILED" sweep label sticks indefinitely.
             final boolean activeNow = started;
             final String reason = failureReason;
-            instance.liveActive = activeNow;
-            instance.liveActiveProperty.set(activeNow);
+            instance.setLiveActive(activeNow);
             Platform.runLater(() -> {
                 if (instance == null) return;
                 instance.updateLiveButtonStyle(activeNow);
@@ -1489,8 +1503,7 @@ public class LiveViewerWindow {
 
                         // Update state and UI on FX thread
                         Platform.runLater(() -> {
-                            liveActive = newState;
-                            liveActiveProperty.set(newState);
+                            setLiveActive(newState);
                             updateLiveButtonStyle(newState);
                             liveToggleButton.setDisable(false);
                             updateRefineFocusButtonState();
@@ -2301,8 +2314,7 @@ public class LiveViewerWindow {
         } else {
             // Recovery exhausted -- turn off so the button stops lying
             logger.warn("No frames for {}ms, recovery exhausted -- turning live OFF", sinceLast);
-            liveActive = false;
-            liveActiveProperty.set(false);
+            setLiveActive(false);
             try {
                 controller.stopContinuousAcquisition();
             } catch (IOException ex) {
@@ -3152,8 +3164,7 @@ public class LiveViewerWindow {
             } catch (IOException e) {
                 logger.warn("Failed to stop continuous acquisition: {}", e.getMessage());
             }
-            liveActive = false;
-            liveActiveProperty.set(false);
+            setLiveActive(false);
         }
 
         // Close window
