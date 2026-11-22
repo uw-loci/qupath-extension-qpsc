@@ -3,8 +3,6 @@ package qupath.ext.qpsc.ui;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
@@ -16,7 +14,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -116,149 +113,6 @@ public class UIFunctions {
 
     /** The repeat key of each error dialog now open from {@code notifyUserOfError}. FX thread only. */
     private static final Set<String> openErrorDialogs = new HashSet<>();
-
-    /**
-     * Prompts the user to validate annotated regions; calls back with true/false.
-     */
-    public static void checkValidAnnotationsGUI(List<String> validNames, Consumer<Boolean> callback) {
-        Platform.runLater(() -> {
-            Stage stage = new Stage();
-            QpscWindows.track(stage);
-            stage.initModality(Modality.NONE);
-            stage.setTitle("Validate annotation boundaries");
-            stage.setAlwaysOnTop(true);
-
-            VBox layout = new VBox(10);
-            Label info = new Label("Checking annotations...");
-            Button yes = new Button("Collect regions");
-            Button no = new Button("Do not collect ANY regions");
-
-            yes.setOnAction(e -> {
-                stage.close();
-                callback.accept(true);
-            });
-            no.setOnAction(e -> {
-                stage.close();
-                callback.accept(false);
-            });
-
-            ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-            exec.scheduleAtFixedRate(
-                    () -> {
-                        Platform.runLater(() -> {
-                            int count = (int) QP.getAnnotationObjects().stream()
-                                    .filter(o -> o.getPathClass() != null) // Add null check
-                                    .filter(o -> validNames.contains(o.getClassification()))
-                                    .count();
-                            info.setText("Total Annotation count in image: " + count
-                                    + "\nADD, MODIFY or DELETE annotations to select regions to be scanned.");
-                            yes.setText("Collect " + count + " regions");
-                        });
-                    },
-                    0,
-                    500,
-                    TimeUnit.MILLISECONDS);
-
-            layout.getChildren().addAll(info, yes, no);
-            stage.setScene(new Scene(layout, 400, 200));
-            stage.show();
-        });
-    }
-
-    //    /**
-    //     * Confirmation dialog for current stage position accuracy.
-    //     */
-    //    public static boolean stageToQuPathAlignmentGUI2() {
-    //        Dialog<Boolean> dlg = new Dialog<>();
-    //        dlg.initModality(Modality.NONE);
-    //        dlg.setTitle("Position Confirmation");
-    //        dlg.setHeaderText(
-    //                "Is the current position accurate?\nCompare with the uManager live view.");
-    //        ButtonType ok = new ButtonType("Current Position is Accurate", ButtonBar.ButtonData.OK_DONE);
-    //        ButtonType cancel = new ButtonType("Cancel acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
-    //        dlg.getDialogPane().getButtonTypes().addAll(ok, cancel);
-    //
-    //        dlg.setResultConverter(btn -> btn == ok);
-    //        return dlg.showAndWait().orElse(false);
-    //    }
-    /**
-     * Confirmation dialog for current stage position accuracy.
-     * Uses a custom Stage with alwaysOnTop to ensure visibility while remaining non-modal.
-     * Must be called from the JavaFX Application Thread.
-     *
-     * <p>Blocking variant -- only safe to call from a background thread that is NOT the
-     * JavaFX Application Thread. For calls originating on the FX thread (e.g. inside
-     * CompletableFuture chains), use {@link #stageAlignmentConfirmAsync()} instead.
-     *
-     * @return true if user confirms position is accurate, false otherwise
-     * @throws IllegalStateException if not called from JavaFX thread
-     */
-    public static boolean stageToQuPathAlignmentGUI2() {
-        if (!Platform.isFxApplicationThread()) {
-            throw new IllegalStateException("stageToQuPathAlignmentGUI2 must be called from JavaFX thread");
-        }
-
-        Stage stage = new Stage();
-        QpscWindows.track(stage);
-        stage.initModality(Modality.NONE);
-        stage.setTitle("Position Confirmation");
-        stage.setAlwaysOnTop(true);
-
-        VBox layout = new VBox(10);
-        layout.setPadding(new Insets(20));
-        layout.setAlignment(Pos.CENTER);
-
-        Label headerLabel = new Label("Is the current position accurate?");
-        headerLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
-
-        Label instructionLabel = new Label("Compare with the uManager live view.");
-
-        HBox buttonBox = new HBox(10);
-        buttonBox.setAlignment(Pos.CENTER);
-
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean result = new AtomicBoolean(false);
-
-        Button confirmButton = new Button("Current Position is Accurate");
-        confirmButton.setDefaultButton(true);
-        confirmButton.setOnAction(e -> {
-            result.set(true);
-            stage.close();
-            latch.countDown();
-        });
-
-        Button cancelButton = new Button("Cancel acquisition");
-        cancelButton.setCancelButton(true);
-        cancelButton.setOnAction(e -> {
-            result.set(false);
-            stage.close();
-            latch.countDown();
-        });
-
-        buttonBox.getChildren().addAll(confirmButton, cancelButton);
-        layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
-
-        Scene scene = new Scene(layout, 350, 150);
-        stage.setScene(scene);
-
-        stage.setOnCloseRequest(e -> {
-            result.set(false);
-            latch.countDown();
-        });
-
-        stage.centerOnScreen();
-        stage.show();
-
-        // Wait for user response without blocking the UI thread
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-
-        return result.get();
-    }
 
     /** Shows a warning with an OK button and waits for it. Call on the FX thread. */
     public static void showWarning(String title, String message) {

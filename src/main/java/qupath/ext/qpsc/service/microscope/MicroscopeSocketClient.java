@@ -611,17 +611,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 } catch (IllegalStateException e) {
                     // Config not set - close connection and fail
                     logger.error("Config not set: {}", e.getMessage());
-                    cleanup();
+                    closePrimaryAfterFailedConnect();
                     throw new IOException("Connection failed: " + e.getMessage(), e);
                 } catch (IOException e) {
                     // Config send failed - close connection and fail
                     logger.error("Failed to send config to server: {}", e.getMessage());
-                    cleanup();
+                    closePrimaryAfterFailedConnect();
                     throw new IOException("Failed to configure server: " + e.getMessage(), e);
                 }
 
             } catch (IOException e) {
-                cleanup();
+                closePrimaryAfterFailedConnect();
                 throw new IOException("Failed to connect to microscope server: " + e.getMessage(), e);
             }
         }
@@ -1318,13 +1318,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         "{}: no reply within {} s; the microscope server may predate this command",
                         command.name(),
                         timeoutMs / 1000);
+                // A slow server may still answer. Left open, the socket would hand that late
+                // reply to the next command as its own answer and stay out of step, so close
+                // it; the next command reconnects.
+                closeSocketQuietly();
+                connected.set(false);
                 return Optional.empty();
             } catch (IOException e) {
                 handleIOException(e);
                 throw e;
             } finally {
                 try {
-                    socket.setSoTimeout(original);
+                    // null when the timeout above closed it
+                    if (socket != null) {
+                        socket.setSoTimeout(original);
+                    }
                 } catch (java.net.SocketException e) {
                     logger.debug("Could not restore the socket timeout: {}", e.getMessage());
                 }
@@ -1674,6 +1682,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 // acquisition then blocks for fifteen seconds.
                 throw refused;
             } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 handleIOException(new IOException("Failed to send acquisition command", e));
                 throw new IOException("Failed to send acquisition command", e);
             }
@@ -4373,6 +4384,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Closes the primary after a failed connect and marks it disconnected. Leaves the auxiliary
+     * socket alone: {@link #cleanup()} also tore that down, under {@code socketLock} only, so each
+     * failed primary reconnect killed a working Live Viewer connection and could null its streams
+     * while an aux command was using them.
+     */
+    private void closePrimaryAfterFailedConnect() {
+        closeSocketQuietly();
+        connected.set(false);
+    }
+
+    /**
      * Silently closes the primary socket and its streams without touching
      * {@code connected} or the auxiliary socket.  Used by {@link #connect()}
      * to clean up a leaked socket from a prior failed attempt before
@@ -4613,25 +4635,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // Bump per-call to 30s: the server's STAT path is genuinely fast,
         // so a 30s wait reliably indicates a real failure (server died,
         // network broken) rather than legitimate busy.
-        int originalTimeout;
-        synchronized (socketLock) {
-            ensureConnected();
-            originalTimeout = socket.getSoTimeout();
-            socket.setSoTimeout(30000);
-        }
-        try {
-            return getAcquisitionStatusInternal();
-        } finally {
-            synchronized (socketLock) {
-                if (socket != null && !socket.isClosed()) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after STATUS poll", e);
-                    }
-                }
-            }
-        }
+        // One lock hold for the timeout, the command and the restore: set and restored in
+        // separate blocks, another thread could change the timeout in between (the chunked
+        // command's finally resets it to the default), and STATUS then ran at 5 s.
+        return withReadTimeout("STATUS", 30000, this::getAcquisitionStatusInternal);
     }
 
     private AcquisitionState getAcquisitionStatusInternal() throws IOException {
@@ -4669,20 +4676,23 @@ public class MicroscopeSocketClient implements AutoCloseable {
             lastFailureMessage = null; // Clear any previous failure message
             return AcquisitionState.COMPLETED;
         } else if (stateStr.startsWith("COMPLETED")) {
-            // Check for extended format with final_z: "COMPLETED|final_z:1234.56"
-            // Read additional bytes if needed
-            synchronized (socketLock) {
-                try {
-                    byte[] additionalBytes = new byte[256]; // Enough for final_z + saturation summary
-                    int bytesRead = input.read(additionalBytes);
+            // Extended format: "COMPLETED|final_z:1234.56|sat:...". Only that form has more
+            // bytes; the bare reply is "COMPLETED" padded to 16, and reading on after it
+            // waited out the 30 s timeout while holding the socket lock.
+            if (stateStr.startsWith("COMPLETED|")) {
+                synchronized (socketLock) {
+                    try {
+                        byte[] additionalBytes = new byte[256]; // Enough for final_z + saturation summary
+                        int bytesRead = input.read(additionalBytes);
 
-                    if (bytesRead > 0) {
-                        String additionalStr = new String(additionalBytes, 0, bytesRead, StandardCharsets.UTF_8);
-                        stateStr = stateStr + additionalStr;
+                        if (bytesRead > 0) {
+                            String additionalStr = new String(additionalBytes, 0, bytesRead, StandardCharsets.UTF_8);
+                            stateStr = stateStr + additionalStr;
+                        }
+                    } catch (IOException e) {
+                        // May timeout if no additional data - that's fine
+                        logger.debug("No additional bytes for COMPLETED status");
                     }
-                } catch (IOException e) {
-                    // May timeout if no additional data - that's fine
-                    logger.debug("No additional bytes for COMPLETED status");
                 }
             }
 
@@ -4860,29 +4870,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public boolean cancelAcquisition() throws IOException {
-        int originalTimeout;
-        synchronized (socketLock) {
-            ensureConnected();
-            originalTimeout = socket.getSoTimeout();
-            socket.setSoTimeout(30000);
-        }
-        try {
+        // One lock hold for the timeout, the command and the restore (see getAcquisitionStatus).
+        return withReadTimeout("CANCEL", 30000, () -> {
             byte[] response = executeCommand(Command.CANCEL, null, 3);
             String ack = new String(response, StandardCharsets.UTF_8);
             boolean cancelled = "ACK".equals(ack);
             logger.info("Acquisition cancellation {}", cancelled ? "acknowledged" : "failed");
             return cancelled;
-        } finally {
-            synchronized (socketLock) {
-                if (socket != null && !socket.isClosed()) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after CANCEL", e);
-                    }
-                }
-            }
-        }
+        });
     }
 
     /**
@@ -7130,6 +7125,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 if (width == 0) {
                     return null;
                 }
+                checkFrameHeader(width, height, channels, bytesPerPixel, dataLength);
 
                 // Read pixel data
                 byte[] pixelData = new byte[dataLength];
@@ -7143,6 +7139,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 cleanupAuxiliary();
                 throw e;
             }
+        }
+    }
+
+    /** Largest frame accepted from the server, in bytes. */
+    static final int MAX_FRAME_BYTES = 512 * 1024 * 1024;
+
+    /**
+     * Checks a GETFRAME / CORRECTFRAME header before its pixel buffer is allocated. The server
+     * sends raw pixels, so the length must equal width * height * channels * bytesPerPixel. A
+     * header read from a stream that is out of step gives a negative or huge length; that is
+     * thrown as an IOException, so the caller resets the auxiliary socket instead of failing with
+     * NegativeArraySizeException (which left the stream out of step for every later frame) or
+     * running out of memory.
+     *
+     * @throws IOException if the header cannot describe a frame
+     */
+    static void checkFrameHeader(int width, int height, int channels, int bytesPerPixel, int dataLength)
+            throws IOException {
+        long expected = (long) width * height * channels * bytesPerPixel;
+        if (width <= 0
+                || height <= 0
+                || channels <= 0
+                || bytesPerPixel <= 0
+                || dataLength != expected
+                || dataLength > MAX_FRAME_BYTES) {
+            throw new IOException(String.format(
+                    java.util.Locale.ROOT,
+                    "Frame header does not describe a frame: %d x %d x %d channels x %d bytes, data %d bytes",
+                    width,
+                    height,
+                    channels,
+                    bytesPerPixel,
+                    dataLength));
         }
     }
 
@@ -7234,6 +7263,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 if (width == 0) {
                     return null;
                 }
+                checkFrameHeader(width, height, channels, bytesPerPixel, dataLength);
 
                 byte[] pixelData = new byte[dataLength];
                 auxInput.readFully(pixelData);

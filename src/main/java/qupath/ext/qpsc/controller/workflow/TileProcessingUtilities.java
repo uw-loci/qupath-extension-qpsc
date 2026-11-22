@@ -901,13 +901,14 @@ public class TileProcessingUtilities {
             logger.info("Cleaning up corrupt stitching output: {}", f.getName());
             if (f.isDirectory()) {
                 // OME-ZARR is a directory tree
-                try {
-                    java.nio.file.Path zarr = f.toPath();
-                    java.nio.file.Files.walk(zarr)
-                            .sorted(java.util.Comparator.reverseOrder())
+                // try-with-resources: an open walk holds directory handles, and on Windows
+                // those stop the folder itself from being deleted. A walk reports an
+                // unreadable subfolder as UncheckedIOException, not IOException.
+                try (var walk = java.nio.file.Files.walk(f.toPath())) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
                             .map(java.nio.file.Path::toFile)
                             .forEach(File::delete);
-                } catch (IOException e) {
+                } catch (IOException | java.io.UncheckedIOException e) {
                     logger.warn("Failed to clean up ZARR directory {}: {}", f.getName(), e.getMessage());
                 }
             } else {

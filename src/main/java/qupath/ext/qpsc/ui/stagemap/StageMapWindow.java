@@ -69,7 +69,8 @@ public class StageMapWindow {
     private static final Logger logger = LoggerFactory.getLogger(StageMapWindow.class);
 
     // ========== Singleton ==========
-    private static StageMapWindow instance;
+    // volatile: read from background threads as well as the FX thread.
+    private static volatile StageMapWindow instance;
 
     // ========== Window Components ==========
     private Stage stage;

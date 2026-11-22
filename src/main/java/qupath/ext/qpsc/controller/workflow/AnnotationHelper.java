@@ -4,8 +4,6 @@ import java.io.File;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
 import org.slf4j.Logger;
@@ -15,6 +13,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.fx.dialogs.Dialogs;
+import qupath.fx.utils.FXUtils;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 
@@ -385,17 +384,17 @@ public class AnnotationHelper {
      * @return Path to selected script or null if canceled
      */
     private static String promptForTissueDetectionScript() {
-        CompletableFuture<String> future = new CompletableFuture<>();
-
-        Platform.runLater(() -> {
+        // callOnApplicationThread runs the dialogs directly when the caller is on the FX
+        // thread and otherwise waits for them; posting with runLater and waiting on a
+        // future deadlocks when the caller is the FX thread.
+        return FXUtils.callOnApplicationThread(() -> {
             var useDetection = Dialogs.showYesNoDialog(
                     "Tissue Detection",
                     "Would you like to run automatic tissue detection?\n\n"
                             + "This will create annotations for tissue regions.");
 
             if (!useDetection) {
-                future.complete(null);
-                return;
+                return null;
             }
 
             // Show file chooser for script selection
@@ -408,15 +407,8 @@ public class AnnotationHelper {
                             new javafx.stage.FileChooser.ExtensionFilter("All Files", "*.*"));
 
             File selectedFile = fileChooser.showOpenDialog(null);
-            future.complete(selectedFile != null ? selectedFile.getAbsolutePath() : null);
+            return selectedFile != null ? selectedFile.getAbsolutePath() : null;
         });
-
-        try {
-            return future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error selecting tissue detection script", e);
-            return null;
-        }
     }
 
     // ------------------------------------------------------------------

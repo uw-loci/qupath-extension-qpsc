@@ -894,7 +894,7 @@ public class StitchingHelper {
         final StitchingQueueWindow[] dialogRef = {null};
         final CountDownLatch dialogLatch = new CountDownLatch(1);
         try {
-            Platform.runLater(() -> {
+            Runnable register = () -> {
                 try {
                     dialogRef[0] = StitchingQueueWindow.show(operationId, operationId);
                     // Also register with DualProgressDialog if provided
@@ -904,7 +904,14 @@ public class StitchingHelper {
                 } finally {
                     dialogLatch.countDown();
                 }
-            });
+            };
+            // On the FX thread, register directly: a posted task cannot run while this
+            // thread waits for it, so the wait below would always time out.
+            if (Platform.isFxApplicationThread()) {
+                register.run();
+            } else {
+                Platform.runLater(register);
+            }
             // Wait for dialog creation to complete (max 5 seconds)
             if (!dialogLatch.await(5, TimeUnit.SECONDS)) {
                 logger.warn("Timeout waiting for the stitching queue registration");
@@ -1035,14 +1042,17 @@ public class StitchingHelper {
                             // Log initial directory state
                             try {
                                 if (Files.exists(tileBaseDir)) {
-                                    long dirCount = Files.list(tileBaseDir)
-                                            .filter(Files::isDirectory)
-                                            .count();
-                                    logger.info("Initial tile base directory contains {} subdirectories", dirCount);
+                                    // Closed at once: an open directory handle stops Windows
+                                    // from deleting or renaming the folder later in the run.
+                                    List<Path> subdirs;
+                                    try (var entries = Files.list(tileBaseDir)) {
+                                        subdirs = entries.filter(Files::isDirectory)
+                                                .toList();
+                                    }
+                                    logger.info(
+                                            "Initial tile base directory contains {} subdirectories", subdirs.size());
                                     logger.debug("Subdirectories:");
-                                    Files.list(tileBaseDir)
-                                            .filter(Files::isDirectory)
-                                            .forEach(path -> logger.debug("  - {}", path.getFileName()));
+                                    subdirs.forEach(path -> logger.debug("  - {}", path.getFileName()));
                                 } else {
                                     logger.warn("Tile base directory does not exist: {}", tileBaseDir);
                                 }

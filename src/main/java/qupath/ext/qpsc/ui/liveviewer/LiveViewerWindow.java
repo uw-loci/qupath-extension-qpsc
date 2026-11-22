@@ -85,7 +85,8 @@ public class LiveViewerWindow {
     private static final Logger logger = LoggerFactory.getLogger(LiveViewerWindow.class);
 
     // Singleton
-    private static LiveViewerWindow instance;
+    // volatile: stopStreaming/restartStreaming read it from workflow threads.
+    private static volatile LiveViewerWindow instance;
 
     // Window components
     private Stage stage;
@@ -650,7 +651,9 @@ public class LiveViewerWindow {
      * @return true if streaming was active and was stopped, false if it was already off
      */
     public static boolean stopStreaming() {
-        if (instance == null || !instance.liveActive) {
+        // Read the field once: the FX thread clears it when the window closes.
+        LiveViewerWindow viewer = instance;
+        if (viewer == null || !viewer.liveActive) {
             return false;
         }
         try {
@@ -661,15 +664,15 @@ public class LiveViewerWindow {
         } catch (IOException e) {
             logger.warn("Failed to stop QPSC Live Viewer streaming: {}", e.getMessage());
         }
-        instance.setLiveActive(false);
-        instance.lastFrameArrivalTime = 0;
+        viewer.setLiveActive(false);
+        viewer.lastFrameArrivalTime = 0;
         // Cosmetic UI update -- non-blocking
         Platform.runLater(() -> {
-            if (instance != null) {
-                instance.updateLiveButtonStyle(false);
-                instance.updateRefineFocusButtonState();
-                if (!instance.isShowingAutofocus()) {
-                    instance.updateStatus("Live OFF (paused for camera operation)");
+            if (instance == viewer) {
+                viewer.updateLiveButtonStyle(false);
+                viewer.updateRefineFocusButtonState();
+                if (!viewer.isShowingAutofocus()) {
+                    viewer.updateStatus("Live OFF (paused for camera operation)");
                 }
             }
         });
@@ -691,7 +694,9 @@ public class LiveViewerWindow {
      * focus buttons are not left stuck disabled with no feedback.
      */
     public static void restartStreaming() {
-        if (instance == null) {
+        // Read the field once: the FX thread clears it when the window closes.
+        LiveViewerWindow viewer = instance;
+        if (viewer == null) {
             return;
         }
         boolean started = false;
@@ -711,13 +716,13 @@ public class LiveViewerWindow {
                 controller.startContinuousAcquisition();
                 started = true;
                 // Reset FPS counter, desync tracking, and recovery state
-                instance.frameCount.set(0);
-                instance.fpsWindowStart.set(System.currentTimeMillis());
-                instance.currentFps = 0;
-                instance.liveOnTimestamp = System.currentTimeMillis();
-                instance.lastFrameArrivalTime = System.currentTimeMillis();
-                instance.recoveryAttempts = 0;
-                instance.recoveryInProgress = false;
+                viewer.frameCount.set(0);
+                viewer.fpsWindowStart.set(System.currentTimeMillis());
+                viewer.currentFps = 0;
+                viewer.liveOnTimestamp = System.currentTimeMillis();
+                viewer.lastFrameArrivalTime = System.currentTimeMillis();
+                viewer.recoveryAttempts = 0;
+                viewer.recoveryInProgress = false;
                 logger.info("QPSC Live Viewer streaming restarted");
             } else {
                 failureReason = "no microscope controller";
@@ -733,19 +738,19 @@ public class LiveViewerWindow {
             // any prior "FAILED" sweep label sticks indefinitely.
             final boolean activeNow = started;
             final String reason = failureReason;
-            instance.setLiveActive(activeNow);
+            viewer.setLiveActive(activeNow);
             Platform.runLater(() -> {
-                if (instance == null) return;
-                instance.updateLiveButtonStyle(activeNow);
-                instance.updateRefineFocusButtonState();
-                if (instance.isShowingAutofocus()) {
+                if (instance != viewer) return;
+                viewer.updateLiveButtonStyle(activeNow);
+                viewer.updateRefineFocusButtonState();
+                if (viewer.isShowingAutofocus()) {
                     // the autofocus status line stays until the search ends
                 } else if (activeNow) {
-                    instance.updateStatus("Live ON - streaming...");
+                    viewer.updateStatus("Live ON - streaming...");
                 } else {
-                    instance.liveToggleButton.setDisable(false);
+                    viewer.liveToggleButton.setDisable(false);
                     String suffix = (reason != null && !reason.isEmpty()) ? " (" + reason + ")" : "";
-                    instance.updateStatus("Live OFF (restart failed -- click Live to retry)" + suffix);
+                    viewer.updateStatus("Live OFF (restart failed -- click Live to retry)" + suffix);
                 }
             });
         }
