@@ -1484,7 +1484,7 @@ public class StageControlPanel extends VBox {
             java.util.Map<String, Double> ppmAngles = loadPpmAnglesLocal(mgr);
             // Per-angle presets are per-angle calibration values, whatever white balance mode
             // the last acquisition used.
-            String perAngle = qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getProtocolName();
+            String perAngle = qupath.ext.qpsc.model.WbMode.PER_ANGLE.getProtocolName();
             var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det, perAngle);
             var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det, perAngle);
             java.util.Map<String, Object> gains =
@@ -1518,7 +1518,7 @@ public class StageControlPanel extends VBox {
             // above (from PPM WB) or the acquisition workflow switches to unified
             // exposure mode with the analog gains from uncrossed.
             Object simpleWb = mgr.getWhiteBalanceSetting(
-                    qupath.ext.qpsc.modality.WbMode.SIMPLE.getProtocolName(),
+                    qupath.ext.qpsc.model.WbMode.SIMPLE.getProtocolName(),
                     modality,
                     currentCameraObjectiveId,
                     det,

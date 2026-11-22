@@ -3,7 +3,7 @@ package qupath.ext.qpsc.ui.acquisition;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.model.WbMode;
 
 /** Z-stack / time-lapse runs send the white balance mode the acquisition dialogs would. */
 class SinglePointWbModeTest {

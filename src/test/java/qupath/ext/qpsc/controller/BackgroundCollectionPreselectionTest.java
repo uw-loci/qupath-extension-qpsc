@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.model.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.state.ObjectiveState;
 

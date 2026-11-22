@@ -402,7 +402,7 @@ public class WhiteBalanceWorkflow {
                                             calibratedModality,
                                             params.objective(),
                                             params.detector(),
-                                            qupath.ext.qpsc.modality.WbMode.SIMPLE),
+                                            qupath.ext.qpsc.model.WbMode.SIMPLE),
                                     profileName);
                         });
                         qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
@@ -654,7 +654,7 @@ public class WhiteBalanceWorkflow {
                                             calibratedModality,
                                             params.objective(),
                                             params.detector(),
-                                            qupath.ext.qpsc.modality.WbMode.PER_ANGLE),
+                                            qupath.ext.qpsc.model.WbMode.PER_ANGLE),
                                     profileName);
                         });
                         qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();

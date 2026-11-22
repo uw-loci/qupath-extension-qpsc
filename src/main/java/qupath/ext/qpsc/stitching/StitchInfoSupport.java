@@ -273,7 +273,7 @@ public final class StitchInfoSupport {
         if (protocolName == null) {
             return null;
         }
-        for (qupath.ext.qpsc.modality.WbMode mode : qupath.ext.qpsc.modality.WbMode.values()) {
+        for (qupath.ext.qpsc.model.WbMode mode : qupath.ext.qpsc.model.WbMode.values()) {
             if (mode.getProtocolName().equals(protocolName)) {
                 return mode.getDisplayName() + " (" + protocolName + ")";
             }

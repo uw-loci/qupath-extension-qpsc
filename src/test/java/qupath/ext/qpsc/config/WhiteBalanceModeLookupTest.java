@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.ProfileWhiteBalance;
-import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.model.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 
 /**

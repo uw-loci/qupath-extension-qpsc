@@ -26,6 +26,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.YamlMaps;
 import qupath.ext.qpsc.geometry.GreenBoxDetector;
 import qupath.ext.qpsc.geometry.LightPathModel;
 import qupath.ext.qpsc.geometry.MacroImageUtility;
@@ -42,7 +43,6 @@ import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
@@ -3222,10 +3222,9 @@ public class StageMapWindow {
                 File scannerConfigFile = new File(configDir, "config_" + currentMacroScannerName + ".yml");
 
                 if (scannerConfigFile.exists()) {
-                    Map<String, Object> scannerConfig =
-                            MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
+                    Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(scannerConfigFile.getAbsolutePath());
 
-                    Double ps = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+                    Double ps = YamlMaps.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
                     if (ps != null && ps > 0) {
                         pixelSizeUm = ps;
                     }
@@ -3234,14 +3233,12 @@ public class StageMapWindow {
                     macroLabelOnRight = side != null
                             && "right".equalsIgnoreCase(side.toString().trim());
 
-                    Double xOff =
-                            MinorFunctions.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "x_offset_um");
+                    Double xOff = YamlMaps.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "x_offset_um");
                     if (xOff != null) {
                         xOffsetUm = xOff;
                     }
 
-                    Double yOff =
-                            MinorFunctions.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "y_offset_um");
+                    Double yOff = YamlMaps.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "y_offset_um");
                     if (yOff != null) {
                         yOffsetUm = yOff;
                     }

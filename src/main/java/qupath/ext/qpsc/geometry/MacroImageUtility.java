@@ -7,12 +7,12 @@ import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.YamlMaps;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -215,20 +215,20 @@ public class MacroImageUtility {
         }
 
         // Load the scanner config
-        Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
+        Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(scannerConfigFile.getAbsolutePath());
 
         // Check if cropping is needed
-        Boolean requiresCropping = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
+        Boolean requiresCropping = YamlMaps.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
         if (requiresCropping == null || !requiresCropping) {
             logger.info("Scanner '{}' does not require cropping, returning original image", scannerName);
             return new CroppedMacroResult(macroImage, macroImage.getWidth(), macroImage.getHeight(), 0, 0);
         }
 
         // Get slide bounds (YAML uses x_min_px / x_max_px / y_min_px / y_max_px keys)
-        Integer xMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
-        Integer xMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
-        Integer yMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
-        Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
+        Integer xMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
+        Integer xMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
+        Integer yMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
+        Integer yMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
 
         if (xMin == null || xMax == null || yMin == null || yMax == null) {
             String error = String.format(
@@ -271,8 +271,8 @@ public class MacroImageUtility {
         }
 
         // Load the scanner config
-        Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
-        Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+        Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(scannerConfigFile.getAbsolutePath());
+        Double pixelSize = YamlMaps.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
 
         if (pixelSize == null || pixelSize <= 0) {
             String error = String.format(

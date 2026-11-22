@@ -11,12 +11,12 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.YamlMaps;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**
  * Dialog for selecting the source microscope/scanner for alignment.
@@ -77,8 +77,8 @@ public class MicroscopeSelectionDialog {
                             logger.debug("Checking file: {}", file.getName());
 
                             // Read the YAML file directly to avoid singleton caching issues
-                            Map<String, Object> configData = MinorFunctions.loadYamlFile(file.getAbsolutePath());
-                            String name = (String) MinorFunctions.getYamlValue(configData, "microscope", "name");
+                            Map<String, Object> configData = YamlMaps.loadYamlFile(file.getAbsolutePath());
+                            String name = (String) YamlMaps.getYamlValue(configData, "microscope", "name");
 
                             if (name == null) {
                                 logger.warn("No microscope name found in {}", file.getName());
@@ -165,7 +165,7 @@ public class MicroscopeSelectionDialog {
                         File configFile = microscopeConfigs.get(selected);
                         try {
                             // Load the config data for this specific file
-                            Map<String, Object> configData = MinorFunctions.loadYamlFile(configFile.getAbsolutePath());
+                            Map<String, Object> configData = YamlMaps.loadYamlFile(configFile.getAbsolutePath());
 
                             // Check for macro support at root level
                             boolean hasMacro = configData.containsKey("macro");
@@ -176,13 +176,13 @@ public class MicroscopeSelectionDialog {
                                     .append("\n");
 
                             // Get microscope type
-                            String type = (String) MinorFunctions.getYamlValue(configData, "microscope", "type");
+                            String type = (String) YamlMaps.getYamlValue(configData, "microscope", "type");
                             if (type != null) {
                                 info.append("Type: ").append(type).append("\n");
                             }
 
                             if (hasMacro) {
-                                Double pixelSize = MinorFunctions.getYamlDouble(configData, "macro", "pixel_size_um");
+                                Double pixelSize = YamlMaps.getYamlDouble(configData, "macro", "pixel_size_um");
 
                                 info.append("Macro image: SUPPORTED");
                                 if (pixelSize != null) {
@@ -192,7 +192,7 @@ public class MicroscopeSelectionDialog {
 
                                 // Check if cropping is required
                                 Boolean cropRequired =
-                                        MinorFunctions.getYamlBoolean(configData, "macro", "requires_cropping");
+                                        YamlMaps.getYamlBoolean(configData, "macro", "requires_cropping");
                                 if (cropRequired != null && cropRequired) {
                                     info.append("Requires slide area cropping\n");
                                 }
@@ -258,7 +258,7 @@ public class MicroscopeSelectionDialog {
 
                         // Check macro support one more time
                         try {
-                            Map<String, Object> configData = MinorFunctions.loadYamlFile(configFile.getAbsolutePath());
+                            Map<String, Object> configData = YamlMaps.loadYamlFile(configFile.getAbsolutePath());
                             boolean hasMacro = configData.containsKey("macro");
 
                             logger.info("User selected microscope '{}' with macro support: {}", selected, hasMacro);

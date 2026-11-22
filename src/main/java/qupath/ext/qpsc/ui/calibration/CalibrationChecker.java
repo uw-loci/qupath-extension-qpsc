@@ -334,17 +334,17 @@ public class CalibrationChecker {
             modes.add(
                     angleCount > 0
                             ? new ModeStatus(
-                                    qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getDisplayName(),
+                                    qupath.ext.qpsc.model.WbMode.PER_ANGLE.getDisplayName(),
                                     Status.READY,
                                     angleCount + " angles")
                             : new ModeStatus(
-                                    qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getDisplayName(),
+                                    qupath.ext.qpsc.model.WbMode.PER_ANGLE.getDisplayName(),
                                     Status.WARNING,
                                     "not calibrated"));
 
             boolean hasSimple = mgr.getProfileSetting(modality, objective, detector, "simple_wb") != null;
             modes.add(new ModeStatus(
-                    qupath.ext.qpsc.modality.WbMode.SIMPLE.getDisplayName(),
+                    qupath.ext.qpsc.model.WbMode.SIMPLE.getDisplayName(),
                     hasSimple ? Status.READY : Status.WARNING,
                     hasSimple ? "calibrated" : "not calibrated"));
 
@@ -372,9 +372,9 @@ public class CalibrationChecker {
         if (wbProtocolName == null) {
             return problems;
         }
-        qupath.ext.qpsc.modality.WbMode chosen;
+        qupath.ext.qpsc.model.WbMode chosen;
         try {
-            chosen = qupath.ext.qpsc.modality.WbMode.fromProtocolName(wbProtocolName);
+            chosen = qupath.ext.qpsc.model.WbMode.fromProtocolName(wbProtocolName);
         } catch (RuntimeException e) {
             return problems;
         }

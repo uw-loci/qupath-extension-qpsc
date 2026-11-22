@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.model;
 
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;

@@ -15,6 +15,7 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.YamlMaps;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.geometry.FlipResolver;
 import qupath.ext.qpsc.geometry.GreenBoxDetector;
@@ -608,14 +609,14 @@ public class ExistingAlignmentPath {
         File scannerConfigFile = new File(configDir, "config_" + scannerName + ".yml");
 
         if (scannerConfigFile.exists()) {
-            Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
-            Boolean requiresCropping = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
+            Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(scannerConfigFile.getAbsolutePath());
+            Boolean requiresCropping = YamlMaps.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
 
             if (requiresCropping != null && requiresCropping) {
-                Integer xMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
-                Integer xMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
-                Integer yMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
-                Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
+                Integer xMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
+                Integer xMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
+                Integer yMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
+                Integer yMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
 
                 if (xMin != null && xMax != null && yMin != null && yMax != null) {
                     return MacroImageUtility.cropToSlideArea(originalMacro, xMin, xMax, yMin, yMax);

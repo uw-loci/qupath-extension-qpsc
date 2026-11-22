@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.YamlMaps;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
 import qupath.ext.qpsc.controller.workflow.TileProcessingUtilities;
 import qupath.ext.qpsc.geometry.FlipResolver;
@@ -483,7 +484,7 @@ public class MicroscopeAlignmentWorkflow {
         logger.info("Using scanner '{}' for macro image processing", selectedScanner);
 
         // Load the scanner configuration directly to avoid singleton caching
-        Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
+        Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(selectedScannerConfigPath);
 
         // Check if scanner requires cropping
         boolean requiresCropping = false;
@@ -493,16 +494,16 @@ public class MicroscopeAlignmentWorkflow {
         @SuppressWarnings("unchecked")
         Map<String, Object> macroConfig = (Map<String, Object>) scannerConfig.get("macro");
         if (macroConfig != null) {
-            Boolean cropRequired = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
+            Boolean cropRequired = YamlMaps.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
             requiresCropping = cropRequired != null && cropRequired;
         }
 
         if (requiresCropping) {
             // Get slide bounds from scanner config
-            Integer xMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
-            Integer xMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
-            Integer yMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
-            Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
+            Integer xMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
+            Integer xMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
+            Integer yMin = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
+            Integer yMax = YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
 
             if (xMin != null && xMax != null && yMin != null && yMax != null) {
                 croppedResult = MacroImageUtility.cropToSlideArea(originalMacroImage, xMin, xMax, yMin, yMax);
@@ -916,8 +917,8 @@ public class MicroscopeAlignmentWorkflow {
             double macroPixelSize;
             try {
                 // Load the scanner configuration directly
-                Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
-                Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+                Map<String, Object> scannerConfig = YamlMaps.loadYamlFile(selectedScannerConfigPath);
+                Double pixelSize = YamlMaps.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
 
                 if (pixelSize == null || pixelSize <= 0) {
                     String error = String.format(

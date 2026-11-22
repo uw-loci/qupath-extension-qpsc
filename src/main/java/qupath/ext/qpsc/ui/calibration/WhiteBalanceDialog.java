@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.model.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MountedHardware;

@@ -19,7 +19,6 @@ import qupath.ext.qpsc.model.PresetRef;
 import qupath.ext.qpsc.model.PropertyRef;
 import qupath.ext.qpsc.model.PropertyWrite;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**
  * MicroscopeConfigManager
@@ -1292,9 +1291,9 @@ public class MicroscopeConfigManager {
      */
     static String whiteBalanceModeFor(String key, String selectedModeDisplayName) {
         if ("simple_wb".equals(key)) {
-            return qupath.ext.qpsc.modality.WbMode.SIMPLE.getProtocolName();
+            return qupath.ext.qpsc.model.WbMode.SIMPLE.getProtocolName();
         }
-        return qupath.ext.qpsc.modality.WbMode.fromDisplayName(selectedModeDisplayName)
+        return qupath.ext.qpsc.model.WbMode.fromDisplayName(selectedModeDisplayName)
                 .getProtocolName();
     }
 
@@ -3201,7 +3200,7 @@ public class MicroscopeConfigManager {
             return new HashMap<>();
         }
 
-        return MinorFunctions.loadYamlFile(scannerFile.getAbsolutePath());
+        return YamlMaps.loadYamlFile(scannerFile.getAbsolutePath());
     }
 
     /**
@@ -3210,7 +3209,7 @@ public class MicroscopeConfigManager {
      */
     public double getScannerMacroPixelSize(String scannerName) {
         Map<String, Object> scannerConfig = loadScannerConfig(scannerName);
-        Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+        Double pixelSize = YamlMaps.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
 
         if (pixelSize == null || pixelSize <= 0) {
             logger.error("No valid macro pixel size for scanner: {}", scannerName);
@@ -3227,16 +3226,16 @@ public class MicroscopeConfigManager {
     public Map<String, Integer> getScannerCropBounds(String scannerName) {
         Map<String, Object> scannerConfig = loadScannerConfig(scannerName);
 
-        Boolean requiresCropping = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
+        Boolean requiresCropping = YamlMaps.getYamlBoolean(scannerConfig, "macro", "requires_cropping");
         if (requiresCropping == null || !requiresCropping) {
             return null;
         }
 
         Map<String, Integer> bounds = new HashMap<>();
-        bounds.put("x_min", MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px"));
-        bounds.put("x_max", MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px"));
-        bounds.put("y_min", MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px"));
-        bounds.put("y_max", MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px"));
+        bounds.put("x_min", YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px"));
+        bounds.put("x_max", YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px"));
+        bounds.put("y_min", YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px"));
+        bounds.put("y_max", YamlMaps.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px"));
 
         if (bounds.values().stream().anyMatch(Objects::isNull)) {
             logger.error("Incomplete crop bounds for scanner: {} - some values are null", scannerName);

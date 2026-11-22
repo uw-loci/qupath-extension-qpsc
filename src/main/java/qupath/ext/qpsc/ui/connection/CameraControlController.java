@@ -55,7 +55,7 @@ public class CameraControlController {
      * The per-angle fields show the per-angle calibration: the active background profile's
      * when it has one, whatever white balance mode the last acquisition used.
      */
-    private static final String PER_ANGLE = qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getProtocolName();
+    private static final String PER_ANGLE = qupath.ext.qpsc.model.WbMode.PER_ANGLE.getProtocolName();
 
     /** Singleton instance tracking - ensures only one dialog is open at a time */
     private static Dialog<Void> activeDialog = null;
